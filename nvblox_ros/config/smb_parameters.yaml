@@ -51,13 +51,13 @@ esdf_2d_min_height: 0.0
 esdf_2d_max_height: 1.0
 
 # Width of the LIDAR scan, in number of beams. Defaults are for the Velodyne VLP16.
-lidar_width: 1800
+lidar_width: 440
 
 # Height of the LIDAR scan, in number of beams. Defaults are for the VLP16.
-lidar_height: 3600
+lidar_height: 32
 
 # The vertical field of view of the LIDAR scan, in degrees. Horizontal FoV is assumed to be 360 degrees. This is used to calculate the individual beam angle offsets.
-lidar_vertical_fov_deg: 45.0
+lidar_vertical_fov_deg: 33.222
 
 # Frame to which the map slice bounds visualization is centered on the xy-plane.
 slice_visualization_attachment_frame_id: "base_link"
