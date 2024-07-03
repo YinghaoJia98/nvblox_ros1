@@ -98,6 +98,9 @@ class NvbloxNode {
   // Publish data on fixed frequency
   void publishOccupancyPointcloud(const ros::TimerEvent& /*event*/);
 
+  // Publish data on fixed frequency
+  void publishTSDFPointcloud(const ros::TimerEvent& /*event*/);
+
   // Process data
   virtual bool processDepthImage(
       const std::pair<sensor_msgs::ImageConstPtr,
@@ -197,6 +200,7 @@ class NvbloxNode {
   ros::Publisher mesh_publisher_;
   ros::Publisher esdf_pointcloud_publisher_;
   ros::Publisher occupancy_publisher_;
+  ros::Publisher tsdf_publisher_;
   ros::Publisher map_slice_publisher_;
   ros::Publisher slice_bounds_publisher_;
   ros::Publisher mesh_marker_publisher_;

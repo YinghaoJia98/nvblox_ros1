@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
         - /PointCloud22
+        - /PointCloud23
       Splitter Ratio: 0.5676470398902893
     Tree Height: 716
   - Class: rviz/Selection
@@ -216,6 +217,34 @@ Visualization Manager:
             {}
       Update Interval: 0
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 2.950000047683716
+        Min Value: 0
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /nvblox_node/tsdf_points
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255
@@ -244,7 +273,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 27.285978317260742
+      Distance: 11.151113510131836
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -252,17 +281,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 6.864328861236572
-        Y: 0.47396501898765564
-        Z: 1.7392127513885498
+        X: 0.6573663949966431
+        Y: -0.5821074843406677
+        Z: 3.0780832767486572
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0797969102859497
+      Pitch: -0.00020228326320648193
       Target Frame: <Fixed Frame>
-      Yaw: 0.0015664100646972656
+      Yaw: 5.389742374420166
     Saved: ~
 Window Geometry:
   Displays:
@@ -280,5 +309,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1680
-  X: 818
-  Y: 248
+  X: 1297
+  Y: 251

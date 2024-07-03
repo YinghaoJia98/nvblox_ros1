@@ -31,6 +31,18 @@ inline void LayerConverter::pointcloudMsgFromLayer(
   pointcloudMsgFromLayerInAABB<VoxelType>(layer, aabb, pointcloud_msg);
 }
 
+// Convert an SDF to two pointcloud.
+template <typename VoxelType>
+inline void LayerConverter::pointcloudMsgFromLayer(
+    const VoxelBlockLayer<VoxelType>& layer,
+    sensor_msgs::PointCloud2* FreePointcloud_msg,
+    sensor_msgs::PointCloud2* OccupiedPointcloud_msg) {
+  AxisAlignedBoundingBox aabb;
+  aabb.setEmpty();
+  CustomedPointCloudMsgsFromLayerInAABB<VoxelType>(
+      layer, aabb, FreePointcloud_msg, OccupiedPointcloud_msg);
+}
+
 }  // namespace conversions
 }  // namespace nvblox
 

@@ -35,11 +35,25 @@ class LayerConverter {
   void pointcloudMsgFromLayer(const VoxelBlockLayer<VoxelType>& layer,
                               sensor_msgs::PointCloud2* pointcloud_msg);
 
+  // Convert a layer to two pointcloud.
+  template <typename VoxelType>
+  void pointcloudMsgFromLayer(const VoxelBlockLayer<VoxelType>& layer,
+                              sensor_msgs::PointCloud2* FreePointcloud_msg,
+                              sensor_msgs::PointCloud2* OccupiedPointcloud_msg);
+
   // Convert a layer in AABB to a pointcloud.
   template <typename VoxelType>
   void pointcloudMsgFromLayerInAABB(const VoxelBlockLayer<VoxelType>& layer,
                                     const AxisAlignedBoundingBox& aabb,
                                     sensor_msgs::PointCloud2* pointcloud_msg);
+
+  // Convert a layer in AABB to two pointcloud. Free and Occupied
+  template <typename VoxelType>
+  void CustomedPointCloudMsgsFromLayerInAABB(
+      const VoxelBlockLayer<VoxelType>& layer,
+      const AxisAlignedBoundingBox& aabb,
+      sensor_msgs::PointCloud2* FreePointcloud_msg,
+      sensor_msgs::PointCloud2* OccupiedPointcloud_msg);
 
  private:
   cudaStream_t cuda_stream_ = nullptr;
@@ -49,6 +63,13 @@ class LayerConverter {
   unified_ptr<int> max_index_device_;
   unified_ptr<int> max_index_host_;
   device_vector<Index3D> block_indices_device_;
+
+  device_vector<PclPointXYZI> FreePcl_pointcloud_device_;
+  device_vector<PclPointXYZI> OccupiedPcl_pointcloud_device_;
+  unified_ptr<int> max_FreeIndex_device_;
+  unified_ptr<int> max_OccupiedIndex_device_;
+  unified_ptr<int> max_FreeIndex_host_;
+  unified_ptr<int> max_OccupiedIndex_host_;
 };
 
 }  // namespace conversions

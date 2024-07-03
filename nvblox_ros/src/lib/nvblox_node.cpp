@@ -220,6 +220,8 @@ void NvbloxNode::advertiseTopics() {
       "map_slice_bounds", 1, true);
   occupancy_publisher_ =
       nh_private_.advertise<sensor_msgs::PointCloud2>("occupancy", 1, false);
+  tsdf_publisher_ =
+      nh_private_.advertise<sensor_msgs::PointCloud2>("tsdf_points", 1, false);
 }
 
 void NvbloxNode::advertiseServices() {
@@ -274,6 +276,13 @@ void NvbloxNode::setupTimers() {
         boost::bind(&NvbloxNode::publishOccupancyPointcloud, this, _1),
         &processing_queue_);
     occupancy_publishing_timer_ = nh_private_.createTimer(timer_options);
+  } else if (true) {
+    ros::TimerOptions timer_options(
+        ros::Duration(1.0 / occupancy_publication_rate_hz_),
+        boost::bind(&NvbloxNode::publishTSDFPointcloud, this, _1),
+        &processing_queue_);
+    occupancy_publishing_timer_ = nh_private_.createTimer(timer_options);
+  } else {
   }
   if (map_clearing_radius_m_ > 0.0f) {
     ros::TimerOptions timer_options(
@@ -700,6 +709,28 @@ void NvbloxNode::publishOccupancyPointcloud(const ros::TimerEvent& /*event*/) {
     pointcloud_msg.header.frame_id = global_frame_;
     pointcloud_msg.header.stamp = ros::Time::now();
     occupancy_publisher_.publish(pointcloud_msg);
+  }
+}
+
+void NvbloxNode::publishTSDFPointcloud(const ros::TimerEvent& /*event*/) {
+  timing::Timer ros_total_timer("ros/total");
+  timing::Timer esdf_output_timer("ros/tsdf/output");
+
+  if (tsdf_publisher_.getNumSubscribers() > 0) {
+    sensor_msgs::PointCloud2 FreePointcloud_msg;
+    sensor_msgs::PointCloud2 OccupiedPointcloud_msg;
+    std::unique_lock<std::mutex> lock(map_mutex_);
+    layer_converter_.pointcloudMsgFromLayer(
+        mapper_->tsdf_layer(), &FreePointcloud_msg, &OccupiedPointcloud_msg);
+    if (false) {
+      FreePointcloud_msg.header.frame_id = global_frame_;
+      FreePointcloud_msg.header.stamp = ros::Time::now();
+      tsdf_publisher_.publish(FreePointcloud_msg);
+    } else {
+      OccupiedPointcloud_msg.header.frame_id = global_frame_;
+      OccupiedPointcloud_msg.header.stamp = ros::Time::now();
+      tsdf_publisher_.publish(OccupiedPointcloud_msg);
+    }
   }
 }
 

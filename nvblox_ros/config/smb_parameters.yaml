@@ -4,7 +4,7 @@
 # Use this file for a description of all the parameters that can be set or used.
 
 # Whether to use the static occupancy layer for projective integration. If this flag is set to false (default), TSDF integration is used.
-use_static_occupancy_layer: true
+use_static_occupancy_layer: false
 
 # Voxel size (in meters) to use for the map.
 voxel_size: 0.05

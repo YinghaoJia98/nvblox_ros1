@@ -190,5 +190,167 @@ template void LayerConverter::pointcloudMsgFromLayerInAABB<OccupancyVoxel>(
     const VoxelBlockLayer<OccupancyVoxel>& layer,
     const AxisAlignedBoundingBox& aabb, sensor_msgs::PointCloud2* pointcloud);
 
+// Inputs: GPU hash for the E/TSDF.
+//         AABB.
+//         Voxel Size (just needed for ESDF).
+// Outputs: vector of pcl::PointXYZIs.
+//          max index (updated atomically).
+template <typename VoxelType>
+__global__ void copyLayerToTwoPCLKernel(
+    Index3DDeviceHashMapType<VoxelBlock<VoxelType>> block_hash,
+    Index3D* block_indices, size_t num_indices, int max_output_indices,
+    AxisAlignedBoundingBox aabb, float block_size, PclPointXYZI* FreePointcloud,
+    PclPointXYZI* OccupiedPointcloud, int* max_index_FreePCL,
+    int* max_index_OccupiedPCL) {
+  const float voxel_size = block_size / VoxelBlock<VoxelType>::kVoxelsPerSide;
+
+  // Get the relevant block.
+  __shared__ VoxelBlock<VoxelType>* block_ptr;
+  if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+    block_ptr = nullptr;
+    auto it = block_hash.find(block_indices[blockIdx.x]);
+    if (it != block_hash.end()) {
+      block_ptr = it->second;
+    }
+  }
+
+  __syncthreads();
+
+  if (block_ptr == nullptr) {
+    return;
+  }
+
+  // For every voxel, check if it's in the AABB.
+  Index3D voxel_index(threadIdx.x, threadIdx.y, threadIdx.z);
+
+  // Get the voxel position:
+  Vector3f voxel_position = getPositionFromBlockIndexAndVoxelIndex(
+      block_size, block_indices[blockIdx.x], voxel_index);
+
+  if (!aabb.contains(voxel_position)) {
+    return;
+  }
+
+  // Check if this voxel sucks or not.
+  const VoxelType& voxel =
+      block_ptr->voxels[voxel_index.x()][voxel_index.y()][voxel_index.z()];
+  float intensity = 0.0f;
+  if (!getVoxelIntensity<VoxelType>(voxel, voxel_size, &intensity)) {
+    return;
+  }
+
+  int next_index = 0;
+  if (intensity > 0) {
+    next_index = atomicAdd(max_index_FreePCL, 1);
+    if ((next_index) >= max_output_indices) {
+      printf("Overrunning the space. This shouldn't happen.\n");
+      return;
+    }
+    PclPointXYZI& point = FreePointcloud[next_index];
+    point.x = voxel_position.x();
+    point.y = voxel_position.y();
+    point.z = voxel_position.z();
+    point.intensity = 0;
+  } else if (intensity <= 0) {
+    next_index = atomicAdd(max_index_OccupiedPCL, 1);
+    if ((next_index) >= max_output_indices) {
+      printf("Overrunning the space. This shouldn't happen.\n");
+      return;
+    }
+    PclPointXYZI& point = OccupiedPointcloud[next_index];
+    point.x = voxel_position.x();
+    point.y = voxel_position.y();
+    point.z = voxel_position.z();
+    point.intensity = 1;
+  } else {
+    printf("[LayerConversions_Error]: The intensity might be nan.\n");
+  }
+}
+
+template <typename VoxelType>
+void LayerConverter::CustomedPointCloudMsgsFromLayerInAABB(
+    const VoxelBlockLayer<VoxelType>& layer, const AxisAlignedBoundingBox& aabb,
+    sensor_msgs::PointCloud2* FreePointcloud_msg,
+    sensor_msgs::PointCloud2* OccupiedPointcloud_msg) {
+  CHECK_NOTNULL(FreePointcloud_msg);
+  CHECK_NOTNULL(OccupiedPointcloud_msg);
+
+  constexpr int kVoxelsPerSide = VoxelBlock<TsdfVoxel>::kVoxelsPerSide;
+  constexpr int kVoxelsPerBlock =
+      kVoxelsPerSide * kVoxelsPerSide * kVoxelsPerSide;
+  const float voxel_size = layer.voxel_size();
+
+  // In case the AABB is infinite, make sure we have a finite number of
+  // voxels.
+  AxisAlignedBoundingBox aabb_intersect = getAABBOfAllocatedBlocks(layer);
+  if (!aabb.isEmpty()) {
+    aabb_intersect = aabb_intersect.intersection(aabb);
+  }
+
+  // Figure out which blocks are in the AABB.
+  std::vector<Index3D> block_indices =
+      getAllocatedBlocksWithinAABB(layer, aabb_intersect);
+  // Copy to device memory.
+  block_indices_device_ = block_indices;
+
+  if (block_indices.empty()) {
+    return;
+  }
+  size_t num_voxels = block_indices.size() * kVoxelsPerBlock;
+
+  // Allocate two GPU pointcloud.
+  FreePcl_pointcloud_device_.resize(num_voxels);
+  OccupiedPcl_pointcloud_device_.resize(num_voxels);
+
+  // Get the hash.
+  GPULayerView<VoxelBlock<VoxelType>> gpu_layer_view = layer.getGpuLayerView();
+
+  // Create two output size variables.
+  if (!max_FreeIndex_device_) {
+    max_FreeIndex_device_ = make_unified<int>(MemoryType::kDevice);
+  }
+  max_FreeIndex_device_.setZero();
+
+  if (!max_OccupiedIndex_device_) {
+    max_OccupiedIndex_device_ = make_unified<int>(MemoryType::kDevice);
+  }
+  max_OccupiedIndex_device_.setZero();
+
+  // Call the kernel.
+  int dim_block = block_indices.size();
+  dim3 dim_threads(kVoxelsPerSide, kVoxelsPerSide, kVoxelsPerSide);
+
+  copyLayerToTwoPCLKernel<VoxelType>
+      <<<dim_block, dim_threads, 0, cuda_stream_>>>(
+          gpu_layer_view.getHash().impl_, block_indices_device_.data(),
+          block_indices.size(), num_voxels, aabb_intersect, layer.block_size(),
+          FreePcl_pointcloud_device_.data(),
+          OccupiedPcl_pointcloud_device_.data(), max_FreeIndex_device_.get(),
+          max_OccupiedIndex_device_.get());
+  checkCudaErrors(cudaStreamSynchronize(cuda_stream_));
+  checkCudaErrors(cudaPeekAtLastError());
+
+  // Copy the pointcloud out.
+  max_FreeIndex_host_ = max_FreeIndex_device_.clone(MemoryType::kHost);
+  FreePcl_pointcloud_device_.resize(*max_FreeIndex_host_);
+
+  // Copy to the message
+  copyDevicePointcloudToMsg(FreePcl_pointcloud_device_, FreePointcloud_msg);
+
+  // Copy the pointcloud out.
+  max_OccupiedIndex_host_ = max_OccupiedIndex_device_.clone(MemoryType::kHost);
+  OccupiedPcl_pointcloud_device_.resize(*max_OccupiedIndex_host_);
+
+  // Copy to the message
+  copyDevicePointcloudToMsg(OccupiedPcl_pointcloud_device_,
+                            OccupiedPointcloud_msg);
+}
+
+// Template specializations.
+template void LayerConverter::CustomedPointCloudMsgsFromLayerInAABB<TsdfVoxel>(
+    const VoxelBlockLayer<TsdfVoxel>& layer, const AxisAlignedBoundingBox& aabb,
+    sensor_msgs::PointCloud2* FreePointcloud,
+    sensor_msgs::PointCloud2* OccupiedPointcloud);
+
 }  // namespace conversions
 }  // namespace nvblox
